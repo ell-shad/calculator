@@ -105,7 +105,25 @@ internal static class Native
             dir = Directory.GetParent(dir)?.FullName;
         }
 
-        // 3. System library paths (future .deb installs to /usr/lib/...).
+        // 3. Published layout: `dotnet publish` copies the engine to
+        // runtimes/linux-x64/native/ next to the apphost via the csproj content
+        // item (AUD-NEW-1: without this, a plain `dotnet publish -c Release`
+        // produced an app that crashed with DllNotFoundException because the
+        // .so was copied only by build-deb.sh). The RID-specific directory is
+        // checked first so it always wins over any stale root copy.
+        string ridSide = Path.Combine(AppContext.BaseDirectory, "runtimes", "linux-x64", "native", "libCalcManager.so");
+        if (File.Exists(ridSide) && NativeLibrary.TryLoad(ridSide, out IntPtr ridHandle))
+        {
+            return ridHandle;
+        }
+
+        string sideBySide = Path.Combine(AppContext.BaseDirectory, "libCalcManager.so");
+        if (File.Exists(sideBySide) && NativeLibrary.TryLoad(sideBySide, out IntPtr sxsHandle))
+        {
+            return sxsHandle;
+        }
+
+        // 4. System library paths (.deb installs place it under /usr/lib/...).
         if (NativeLibrary.TryLoad("libCalcManager.so", out IntPtr sysHandle))
         {
             return sysHandle;

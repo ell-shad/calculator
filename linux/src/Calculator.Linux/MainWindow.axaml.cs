@@ -17,14 +17,32 @@ namespace Calculator.Linux;
 
 public sealed partial class MainWindow : Window
 {
+    // AUD-NEW-4: mirrors the reference's ApplicationData.Current.LocalSettings
+    // keys (src/CalculatorViewModel/Common/ThemeHelper.cs uses
+    // "SelectedAppThemeKey"; we persist the mode under "UnsupportedAsDefaultKey"-
+    // free key "LastUsedModeKey" semantics — see NavCategory in the reference).
+    internal const string SelectedAppThemeSettingKey = "SelectedAppThemeKey";
+    internal const string LastUsedModeSettingKey = "LastUsedModeKey";
+
+    private readonly LinuxSettings _settings;
     private readonly StandardCalculatorViewModel _vm;
     private readonly DateCalculatorViewModel _dateVM;
     private UnitConverterViewModel? _converterVM;
     private GraphingViewModel? _graphVM;
+    private bool _navRestoring;
 
     public MainWindow()
+        : this(new LinuxSettings())
+    {
+    }
+
+    // Test seam: an isolated settings store so headless tests never touch
+        // the user's real ~/.config/calculator-linux.
+    public MainWindow(LinuxSettings settings)
     {
         InitializeComponent();
+        _settings = settings;
+        ApplyPersistedTheme();
         LinuxLocalization.Current = new LinuxLocalization(System.Globalization.CultureInfo.CurrentCulture);
         _vm = new StandardCalculatorViewModel();
         _vm.SetCalculatorType(ViewMode.Standard);
@@ -40,7 +58,173 @@ public sealed partial class MainWindow : Window
         SyncRadix();
         SyncBits();
         SyncDateMode();
+        RestoreLastMode();
     }
+
+    // --- Theme (AUD-NEW-4) ------------------------------------------------------
+    // The reference persists the user's choice under SelectedAppThemeKey
+    // ("Light"/"Dark"/"Default", default "Default" = follow system) and applies
+    // it through ThemeHelper. The port previously had no app-theme control at
+    // all: App.axaml was hard-wired to RequestedThemeVariant="Default".
+
+    /// <summary>"Light", "Dark" or "Default" (follow system).</summary>
+    public static string ReadPersistedTheme(LinuxSettings settings)
+    {
+        string? v = settings.Get<string>(SelectedAppThemeSettingKey);
+        return v is "Light" or "Dark" ? v : "Default";
+    }
+
+    public static void ApplyTheme(string theme, Application app)
+    {
+        app.RequestedThemeVariant = theme switch
+        {
+            "Light" => ThemeVariant.Light,
+            "Dark" => ThemeVariant.Dark,
+            _ => ThemeVariant.Default,
+        };
+    }
+
+    private void ApplyPersistedTheme() => ApplyTheme(ReadPersistedTheme(_settings), Application.Current!);
+
+    /// <summary>Persist + live-apply. Invalid values fall back to Default.</summary>
+    public void SetTheme(string theme)
+    {
+        string normalized = theme is "Light" or "Dark" ? theme : "Default";
+        _settings.Set(SelectedAppThemeSettingKey, normalized);
+        ApplyTheme(normalized, Application.Current!);
+    }
+
+    // --- Last used mode (AUD-NEW-2 companion: persistence parity) --------------
+    // The reference restores the last-used mode on relaunch
+    // (ApplicationViewMode persisted via NavCategory::GetViewModelId /
+    // s_currentPageChanged in MainPage.xaml.cs).
+
+    public static ViewMode ReadPersistedMode(LinuxSettings settings)
+    {
+        string? v = settings.Get<string>(LastUsedModeSettingKey);
+        return !string.IsNullOrEmpty(v) && Enum.TryParse<ViewMode>(v, out var m)
+            && m != ViewMode.None ? m : ViewMode.Standard;
+    }
+
+    private void RestoreLastMode()
+    {
+        ViewMode mode = ReadPersistedMode(_settings);
+        if (mode == ViewMode.Standard)
+        {
+            return;
+        }
+
+        _navRestoring = true;
+        try
+        {
+            NavigateTo(mode);
+        }
+        finally
+        {
+            _navRestoring = false;
+        }
+    }
+
+    public void PersistMode(ViewMode mode)
+    {
+        if (_navRestoring || mode == ViewMode.None)
+        {
+            return;
+        }
+
+        _settings.Set(LastUsedModeSettingKey, mode.ToString());
+    }
+
+    private void SelectNavTag(string tag)
+    {
+        if (Find("ModeList") is ListBox list)
+        {
+            foreach (object? item in list.Items)
+            {
+                if (item is ListBoxItem lbi && lbi.Tag as string == tag)
+                {
+                    list.SelectedItem = lbi;
+                    return;
+                }
+            }
+        }
+
+        NavigateTo(tag);
+    }
+
+    /// <summary>Route a mode tag exactly like a ModeList selection would.</summary>
+    private void NavigateTo(string tag)
+    {
+        if (tag == "About")
+        {
+            CloseNavPopup();
+            new AboutWindow().ShowDialog(this);
+            return;
+        }
+
+        if (Enum.TryParse<ViewMode>(tag, out var mode))
+        {
+            NavigateTo(mode);
+        }
+        else
+        {
+            ShowCalculator(ViewMode.Standard);
+        }
+    }
+
+    private void NavigateTo(ViewMode mode)
+    {
+        if (ConverterTags.Contains(mode.ToString()))
+        {
+            ShowConverter(mode);
+        }
+        else if (mode == ViewMode.Date)
+        {
+            ShowDate();
+        }
+        else if (mode == ViewMode.Graphing)
+        {
+            ShowGraphing();
+        }
+        else
+        {
+            ShowCalculator(mode);
+        }
+
+        if (mode != ViewMode.Standard)
+        {
+            SyncAngle();
+            SyncRadix();
+            SyncBits();
+        }
+    }
+
+    // --- Always-on-top (AUD-NEW-3) ----------------------------------------------
+    // The reference offers EnterAlwaysOnTopButton / ExitAlwaysOnTopButton with
+    // Alt+Up / Alt+Down shortcuts (see GeneratedResources entries carried over
+    // from the upstream strings). The port had the strings but no Topmost code
+    // path at all — a dead feature. This wires it to Avalonia's Window.Topmost,
+    // which the X11 backend honors (_NET_WM_STATE_ABOVE). Wayland compositors
+    // decide policy per seat; where not honored the call simply has no effect
+    // (documented in PORTING-NOTES).
+
+    public bool IsAlwaysOnTop
+    {
+        get => Topmost;
+        set
+        {
+            Topmost = value;
+            if (Find("AlwaysOnTopToggle") is ToggleButton toggle && toggle.IsChecked != value)
+            {
+                toggle.IsChecked = value;
+            }
+        }
+    }
+
+    public void ToggleAlwaysOnTop() => IsAlwaysOnTop = !IsAlwaysOnTop;
+
+    private void AlwaysOnTop_Click(object? sender, RoutedEventArgs e)
+        => IsAlwaysOnTop = (sender as ToggleButton)?.IsChecked == true;
 
     private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
 
@@ -166,6 +350,10 @@ public sealed partial class MainWindow : Window
             SyncRadix();
             SyncBits();
         }
+
+        // AUD-NEW-4 companion: the reference restores the last-used mode on
+        // relaunch; persist it here (not during startup restore).
+        PersistMode(mode);
     }
 
     private void SetCategoryName(string name)
