@@ -38,6 +38,26 @@
                    FontSize="24" FontWeight="SemiBold" VerticalAlignment="Center"
                    Margin="8,0,0,0" TextTrimming="CharacterEllipsis" />
         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+          <!-- AUD-NEW-3: reference EnterAlwaysOnTopButton/ExitAlwaysOnTopButton
+               (TitleBar.xaml; strings "Keep on top"/"Back to full view",
+               AutomationProperties + ToolTip in Resources.resw). -->
+          <ToggleButton Classes="icon" Name="AlwaysOnTopToggle" Click="AlwaysOnTop_Click"
+                        ToolTip.Tip="Keep on top"
+                        auto:AutomationProperties.AutomationId="AlwaysOnTopButton"
+                        auto:AutomationProperties.Name="Keep on top">
+            <Path Data="M5,5 L12,12 M12,5 L5,12" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" StrokeThickness="2" Width="18" Height="18" Stretch="Uniform"/>
+          </ToggleButton>
+          <!-- AUD-NEW-4: theme picker. The reference Settings store persists
+               SelectedAppThemeKey Light/Dark/Default and applies it live. -->
+          <ComboBox Name="ThemeSelector" MinWidth="96" Margin="6,0,0,0" VerticalAlignment="Center"
+                    SelectionChanged="ThemeSelector_SelectionChanged"
+                    ToolTip.Tip="App theme"
+                    auto:AutomationProperties.AutomationId="ThemeSelector"
+                    auto:AutomationProperties.Name="App theme">
+            <ComboBoxItem Content="Light" Tag="Light" />
+            <ComboBoxItem Content="Dark" Tag="Dark" />
+            <ComboBoxItem Content="Default" Tag="Default" />
+          </ComboBox>
           <ToggleButton Classes="icon" Name="HistoryToggle" Click="HistoryToggle_Click"
                         ToolTip.Tip="History and memory"
                         auto:AutomationProperties.Name="History and memory">
