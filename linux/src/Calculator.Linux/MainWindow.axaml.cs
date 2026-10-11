@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
+using Avalonia.Styling;
 using Calculator.Linux.Common;
 using Calculator.Linux.Services;
 using Calculator.Linux.Services.Graphing;
@@ -58,7 +59,45 @@ public sealed partial class MainWindow : Window
         SyncRadix();
         SyncBits();
         SyncDateMode();
+        SyncThemeSelector();
         RestoreLastMode();
+    }
+
+    // AUD-NEW-4: reflect the persisted theme in the header picker without
+    // re-persisting it (guard against SelectionChanged recursion).
+    private bool _syncingTheme;
+
+    private void SyncThemeSelector()
+    {
+        if (Find("ThemeSelector") is not ComboBox combo)
+        {
+            return;
+        }
+
+        string current = ReadPersistedTheme(_settings);
+        _syncingTheme = true;
+        try
+        {
+            combo.SelectedItem = combo.Items.OfType<ComboBoxItem>()
+                .FirstOrDefault(i => string.Equals(i.Tag as string, current, StringComparison.Ordinal));
+        }
+        finally
+        {
+            _syncingTheme = false;
+        }
+    }
+
+    private void ThemeSelector_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (_syncingTheme)
+        {
+            return;
+        }
+
+        if (sender is ComboBox combo && combo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+        {
+            SetTheme(tag);
+        }
     }
 
     // --- Theme (AUD-NEW-4) ------------------------------------------------------
@@ -944,7 +983,25 @@ public sealed partial class MainWindow : Window
         // Windows resolves those access keys as Ctrl+Alt+<digit>; on Linux both
         // that and the plain Alt+<digit> mnemonic form are accepted. The app has
         // no Alt menu, so neither can collide with anything else.
+        // AUD-NEW-3: reference title-bar shortcuts F8 / Alt+Up enter always-on-
+        // top, Alt+Down exits (src/Calculator/Views/TitleBar.xaml.cs
+        // OnLayoutChanged + AlwaysOnTop shortcuts). The port previously had the
+        // strings but no Topmost code path at all.
         bool alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
+        if (e.Key == Key.F8 || (alt && e.Key == Key.Up))
+        {
+            IsAlwaysOnTop = true;
+            e.Handled = true;
+            return;
+        }
+
+        if (alt && e.Key == Key.Down)
+        {
+            IsAlwaysOnTop = false;
+            e.Handled = true;
+            return;
+        }
+
         if (alt && !ctrl && SwitchModeByShortcut(e.Key))
         {
             e.Handled = true;

@@ -68,20 +68,20 @@ public sealed class ReferenceCopyPasteTests
             atLimit += "+1";
         }
         Assert.Equal(
-            (uint)CopyPasteManager.ExtractOperands(atLimit, ViewMode.Standard).Count,
-            (uint)100);
+            (uint)100,
+            (uint)CopyPasteManager.ExtractOperands(atLimit, ViewMode.Standard).Count);
 
         atLimit += "+1";
         Assert.Equal(
-            (uint)CopyPasteManager.ExtractOperands(atLimit, ViewMode.Standard).Count,
-            (uint)0);
+            (uint)0,
+            (uint)CopyPasteManager.ExtractOperands(atLimit, ViewMode.Standard).Count);
 
         Assert.Equal(
-            (uint)CopyPasteManager.ExtractOperands("12e9999", ViewMode.Standard).Count,
-            (uint)1);
+            (uint)1,
+            (uint)CopyPasteManager.ExtractOperands("12e9999", ViewMode.Standard).Count);
         Assert.Equal(
-            (uint)CopyPasteManager.ExtractOperands("12e10000", ViewMode.Standard).Count,
-            (uint)0);
+            (uint)0,
+            (uint)CopyPasteManager.ExtractOperands("12e10000", ViewMode.Standard).Count);
     }
 
     // ---- reference: ValidateSanitizeOperand ----
@@ -89,18 +89,18 @@ public sealed class ReferenceCopyPasteTests
     [Fact]
     public void SanitizeOperand_ReferenceCases()
     {
-        Assert.Equal(CopyPasteManager.SanitizeOperand("((1234"), "1234");
-        Assert.Equal(CopyPasteManager.SanitizeOperand("1234))"), "1234");
-        Assert.Equal(CopyPasteManager.SanitizeOperand("-1234"), "1234");
-        Assert.Equal(CopyPasteManager.SanitizeOperand("+1234"), "1234");
-        Assert.Equal(CopyPasteManager.SanitizeOperand("-(1234)"), "1234");
-        Assert.Equal(CopyPasteManager.SanitizeOperand("+(1234)"), "1234");
-        Assert.Equal(CopyPasteManager.SanitizeOperand("12-34"), "1234");
-        Assert.Equal(CopyPasteManager.SanitizeOperand("((((1234))))"), "1234");
-        Assert.Equal(CopyPasteManager.SanitizeOperand("1'2'3'4"), "1234");
-        Assert.Equal(CopyPasteManager.SanitizeOperand("'''''1234''''"), "1234");
-        Assert.Equal(CopyPasteManager.SanitizeOperand("1_2_3_4"), "1234");
-        Assert.Equal(CopyPasteManager.SanitizeOperand("______1234___"), "1234");
+        Assert.Equal("1234", CopyPasteManager.SanitizeOperand("((1234"));
+        Assert.Equal("1234", CopyPasteManager.SanitizeOperand("1234))"));
+        Assert.Equal("1234", CopyPasteManager.SanitizeOperand("-1234"));
+        Assert.Equal("1234", CopyPasteManager.SanitizeOperand("+1234"));
+        Assert.Equal("1234", CopyPasteManager.SanitizeOperand("-(1234)"));
+        Assert.Equal("1234", CopyPasteManager.SanitizeOperand("+(1234)"));
+        Assert.Equal("1234", CopyPasteManager.SanitizeOperand("12-34"));
+        Assert.Equal("1234", CopyPasteManager.SanitizeOperand("((((1234))))"));
+        Assert.Equal("1234", CopyPasteManager.SanitizeOperand("1'2'3'4"));
+        Assert.Equal("1234", CopyPasteManager.SanitizeOperand("'''''1234''''"));
+        Assert.Equal("1234", CopyPasteManager.SanitizeOperand("1_2_3_4"));
+        Assert.Equal("1234", CopyPasteManager.SanitizeOperand("______1234___"));
     }
 
     // ---- reference: ValidatePrefixCurrencySymbols ----
