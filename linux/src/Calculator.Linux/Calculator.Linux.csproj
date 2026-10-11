@@ -34,6 +34,20 @@
     <Content Include="..\..\..\src\Calculator.ViewModels\DataLoaders\DefaultFromToCurrency.json" Link="DefaultFromToCurrency.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!--
+      AUD-NEW-1: the native engine must ship next to the apphost in EVERY
+      publish mode (plain `dotnet publish -c Release -r linux-x64`, not just
+      the .deb built by build-deb.sh). Published under runtimes/<rid>/native
+      so it lands in the publish root for that RID. Conditioned on the file
+      existing so a repo without the CMake build still restores/builds the
+      managed layer; the resolver falls back to the in-tree path then.
+    -->
+    <Content Include="..\..\build\calc-manager\libCalcManager.so"
+             Condition="Exists('..\..\build\calc-manager\libCalcManager.so')">
+      <Link>runtimes/linux-x64/native/libCalcManager.so</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>
