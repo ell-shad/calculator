@@ -1,76 +1,97 @@
-# Calculator
-The Windows Calculator app is a modern Windows app written in C++ and C# that ships pre-installed with Windows.
-The app provides standard, scientific, and programmer calculator functionality, as well as a set of converters between various units of measurement and currencies.
+# Calculator for Linux
 
-Calculator ships regularly with new features and bug fixes. You can get the latest version of Calculator in the [Microsoft Store](https://www.microsoft.com/store/apps/9WZDNCRFHVN5).
+A **native Linux port of [Windows Calculator](https://github.com/microsoft/calculator)**.
 
-[![Continuous Integration](https://github.com/microsoft/calculator/actions/workflows/action-ci.yml/badge.svg)](https://github.com/microsoft/calculator/actions/workflows/action-ci.yml)
+This is a fork of `microsoft/calculator`. The default branch of this fork is
+`linux-port`, which contains the port; `main` is left exactly as Microsoft
+published it.
 
-<img src="docs/Images/CalculatorScreenshot.png" alt="Calculator Screenshot" width="450px" />
+| | |
+|---|---|
+| UI | [Avalonia](https://avaloniaui.net) (.NET 10) |
+| Engine | Microsoft's own C++ `CalcManager` + `Ratpack`, **compiled unmodified** |
+| Packaging | Debian `.deb` — no Wine, no Windows SDK, no Visual Studio |
 
-## Features
-- Standard Calculator functionality which offers basic operations and evaluates commands immediately as they are entered.
-- Scientific Calculator functionality which offers expanded operations and evaluates commands using order of operations.
-- Programmer Calculator functionality which offers common mathematical operations for developers including conversion between common bases.
-- Date Calculation functionality which offers the difference between two dates, as well as the ability to add/subtract years, months and/or days to/from a given input date.
-- Calculation history and memory capabilities.
-- Conversion between many units of measurement.
-- Currency conversion based on data retrieved from [Bing](https://www.bing.com).
-- [Infinite precision](https://en.wikipedia.org/wiki/Arbitrary-precision_arithmetic) for basic
-  arithmetic operations (addition, subtraction, multiplication, division) so that calculations
-  never lose precision.
+## Why the numbers are exact
 
-## Getting started
-Prerequisites:
-- Your computer must be running Windows 11, build 22000 or newer.
-- Install the latest version of [Visual Studio](https://developer.microsoft.com/en-us/windows/downloads) (the free community edition is sufficient).
-  - Install the "Universal Windows Platform Development" workload.
-  - Install the optional "C++ Universal Windows Platform tools" component.
-  - Install the latest Windows 11 SDK.
+The arithmetic is not reimplemented. `src/CalcManager` — including the `Ratpack`
+arbitrary-precision library — is compiled as-is via CMake behind a thin frozen C
+ABI, and the managed side reaches it through P/Invoke. So the port inherits the
+reference engine's exactness rather than IEEE floating-point residue:
 
-  ![Visual Studio Installation Screenshot](docs/Images/VSInstallationScreenshot.png)
-- Install the [XAML Styler](https://marketplace.visualstudio.com/items?itemName=TeamXavalon.XAMLStyler) Visual Studio extension.
+| Input | Result |
+|---|---|
+| `0.1 + 0.2` | `0.3` |
+| `1/3 * 3` | `1` |
+| `√(2.25) − 1.5` | `0` |
+| `170!` | `7.2574156153079989673967282111293e+306` — beyond `double` range |
+| `e` | 30 significant digits |
 
-- Get the code:
-    ```
-    git clone https://github.com/Microsoft/calculator.git
-    ```
+## Build and install
 
-- Open [src\Calculator.slnx](/src/Calculator.slnx) in Visual Studio to build and run the Calculator app.
-- For a general description of the Calculator project architecture see [ApplicationArchitecture.md](docs/ApplicationArchitecture.md).
-- To run the UI Tests, you need to make sure that
-  [Windows Application Driver (WinAppDriver)](https://github.com/microsoft/WinAppDriver/releases/latest)
-  is installed.
+```bash
+./linux/packaging/build-deb.sh 1.0.0
+sudo apt install ./linux/publish/calculator-linux_1.0.0_amd64.deb
+```
 
-## Contributing
-Want to contribute? The team encourages community feedback and contributions. Please follow our [contributing guidelines](CONTRIBUTING.md).
+Full instructions: [`linux/README.md`](linux/README.md).
 
-If Calculator is not working properly, please file a report in the [Feedback Hub](https://insider.windows.com/en-us/fb/?contextid=130).
-We also welcome [issues submitted on GitHub](https://github.com/Microsoft/calculator/issues).
+## Modes
 
-## Roadmap
-For information regarding Windows Calculator plans and release schedule, please see the [Windows Calculator Roadmap](docs/Roadmap.md).
+Standard · Scientific · Programmer · Date calculation · Currency · thirteen unit
+converters · Graphing.
 
-### Graphing Mode
-Adding graphing calculator functionality [is on the project roadmap](https://github.com/Microsoft/calculator/issues/338) and we hope that this project can create a great end-user experience around graphing. To that end, the UI from the official in-box Windows Calculator is currently part of this repository, although the proprietary Microsoft-built graphing engine, which also drives graphing in Microsoft Mathematics and OneNote, is not. Community members can still be involved in the creation of the UI, however developer builds will not have graphing functionality due to the use of a [mock implementation of the engine](/src/GraphingImpl/Mocks) built on top of a
-[common graphing API](/src/GraphingInterfaces).
+Keyboard shortcuts bind to the **typed character**, not to a physical key
+position, so operators work on any layout — QWERTZ, AZERTY, non-Latin — matching
+upstream's 71 declared button shortcuts.
 
-## Diagnostic Data
-This project collects usage data and sends it to Microsoft to help improve our products and services.
-Read our [privacy statement](https://go.microsoft.com/fwlink/?LinkId=521839) to learn more.
-Diagnostic data is disabled in development builds by default, and can be enabled with the `SEND_DIAGNOSTICS`
-build flag.
+## Substitutions
 
-## Currency Converter
-Windows Calculator includes a currency converter feature that uses mock data in developer builds. The data that
-Microsoft uses for the currency converter feature (e.g., in the retail version of the application) is not licensed
-for your use. The mock data will be clearly identifiable as it references planets instead of countries,
-and remains static regardless of selected inputs.
+Every proprietary component had to be replaced with something open-source. Each
+one, the component it replaced, and why are listed in
+[`linux/docs/PORTING-NOTES.md`](linux/docs/PORTING-NOTES.md).
 
-## Reporting Security Issues
-Please refer to [SECURITY.md](./SECURITY.md).
+## Audit
 
-## License
-Copyright (c) Microsoft Corporation. All rights reserved.
+This port was audited against the unmodified reference and the findings are
+published rather than quietly fixed:
 
-Licensed under the [MIT License](./LICENSE).
+| Path | What |
+|---|---|
+| [`AUDIT/REPORT.md`](AUDIT/REPORT.md) | verdict, defect list, evidence, what is still open |
+| [`AUDIT/DEFECTS.md`](AUDIT/DEFECTS.md) | each defect: repro, root cause, fix, regression test |
+| [`AUDIT/PROGRESS.md`](AUDIT/PROGRESS.md) | phase-by-phase state |
+
+Highlights: **8 defects found and fixed**, including a High-severity CVE that was
+shipping inside the `.deb` and a mode whose calculations silently never appeared
+in History. **367 assertions transcribed verbatim from Microsoft's own test
+suites** replay against this port — engine vectors, view-model sequences,
+navigation facts, history, date arithmetic and copy/paste.
+
+## Verification
+
+```bash
+./AUDIT/run_all.sh
+```
+
+A ten-step gate: engine build and `ctest`, managed build, the full test suite,
+locale tests in their own process, `.deb` packaging, converter/resource byte
+parity against the reference, a transitive licence **and CVE** audit, a live
+on-screen drive through every mode, and display-scaling plus live-theme checks.
+It exits non-zero on any failure.
+
+Current: **549 + 18 managed tests and the native `ctest`, all green.**
+
+## Not finished
+
+Open items are listed honestly in
+[`AUDIT/PROGRESS.md`](AUDIT/PROGRESS.md). The substantive ones: a soak/RSS run,
+enumerating the AT-SPI accessibility tree, and a decision on the Scientific
+keypad, which scrolls here where upstream uses a shift-toggle.
+
+---
+
+Upstream is **Microsoft Corporation**; this port is not affiliated with or
+endorsed by Microsoft. Upstream's `main` branch, `LICENSE`, `SECURITY.md` and
+code of conduct are unmodified and remain governed by the
+[MIT licence](LICENSE).
